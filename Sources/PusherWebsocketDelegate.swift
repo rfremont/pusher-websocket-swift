@@ -3,13 +3,40 @@ import Starscream
 
 extension PusherConnection: WebSocketDelegate {
 
+  public func didReceive(event: WebSocketEvent, client: WebSocket) {
+    switch event {
+    case .connected:
+      websocketDidConnect(socket: client)
+    case .disconnected(_, _):
+      websocketDidDisconnect(socket: client, error: nil)
+    case .text(let string):
+      websocketDidReceiveMessage(socket: client, text: string)
+    case .binary(let data):
+      websocketDidReceiveData(socket: client, data: data)
+    case .ping:
+      self.delegate?.debugLog?(message: "[PUSHER DEBUG] Ping")
+    case .pong:
+      self.delegate?.debugLog?(message: "[PUSHER DEBUG] Websocket received pong")
+      resetActivityTimeoutTimer()
+    case .viabilityChanged(let viability):
+      self.delegate?.debugLog?(message: "[PUSHER DEBUG] viabilityChanged: \(viability)")
+
+    case .reconnectSuggested(let suggestion):
+      self.delegate?.debugLog?(message: "[PUSHER DEBUG] reconnectSuggested: \(suggestion)")
+    case .cancelled:
+      websocketDidDisconnect(socket: client, error: nil)
+    case .error(let error):
+      websocketDidDisconnect(socket: client, error: error)
+    }
+  }
+
     /**
         Delegate method called when a message is received over a websocket
 
         - parameter ws:   The websocket that has received the message
         - parameter text: The message received over the websocket
     */
-    public func websocketDidReceiveMessage(socket ws: WebSocketClient, text: String) {
+    private func websocketDidReceiveMessage(socket ws: WebSocketClient, text: String) {
         self.delegate?.debugLog?(message: "[PUSHER DEBUG] websocketDidReceiveMessage \(text)")
 
         guard let payload = PusherParser.getPusherEventJSON(from: text),
@@ -36,7 +63,7 @@ extension PusherConnection: WebSocketDelegate {
         - parameter ws:    The websocket that disconnected
         - parameter error: The error, if one exists, when disconnected
     */
-    public func websocketDidDisconnect(socket ws: WebSocketClient, error: Error?) {
+    private func websocketDidDisconnect(socket ws: WebSocketClient, error: Error?) {
         // Handles setting channel subscriptions to unsubscribed wheter disconnection
         // is intentional or not
         if connectionState == .disconnecting || connectionState == .connected {
@@ -123,18 +150,9 @@ extension PusherConnection: WebSocketDelegate {
 
         - parameter ws:    The websocket that connected
     */
-    public func websocketDidConnect(socket ws: WebSocketClient) {
+    private func websocketDidConnect(socket ws: WebSocketClient) {
         self.socketConnected = true
     }
 
-    public func websocketDidReceiveData(socket ws: WebSocketClient, data: Data) {}
-}
-
-extension PusherConnection: WebSocketPongDelegate {
-
-    public func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
-        self.delegate?.debugLog?(message: "[PUSHER DEBUG] Websocket received pong")
-        resetActivityTimeoutTimer()
-    }
-
+    private func websocketDidReceiveData(socket ws: WebSocketClient, data: Data) {}
 }
